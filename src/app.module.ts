@@ -1,13 +1,8 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { JdParserModule } from './jd-parser/jd-parser.module';
-import { QuestionGeneratorModule } from './question-generator/question-generator.module';
-import { CandidateEvaluationModule } from './candidate-evaluation/candidate-evaluation.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
-  imports: [JdParserModule, QuestionGeneratorModule, CandidateEvaluationModule],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [PrismaModule, ChatModule],
 })
 export class AppModule {}
