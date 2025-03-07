@@ -20,3 +20,30 @@ model ChatMessage {
   message   String
   createdAt DateTime @default(now())
 }
+
+model Job {
+  id           String   @id @default(uuid())
+  title        String
+  company      String
+  location     String
+  salary       String?
+  experience   String
+  description  String
+  requirements String[]
+  createdAt    DateTime @default(now())
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MagicLink {
+  id        String   @id @default(uuid())
+  token     String
+  email     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
