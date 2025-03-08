@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as fs from 'fs-extra';
 import * as pdfParse from 'pdf-parse';
+import { ChatMessage, Job } from '@prisma/client';
 @Injectable()
 export class ChatService {
   private genAI: GoogleGenerativeAI;
@@ -15,55 +16,159 @@ export class ChatService {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
-  async processMessage(userId: string, message: string): Promise<string> {
+  async processMessage(candidateId: string, message: string): Promise<string> {
     await this.prisma.chatMessage.create({
-      data: { userId, sender: 'user', message },
+      data: { candidateId, sender: 'user', message, isCompleted: false },
     });
-    const aiResponse = await this.getAIResponse(userId, message);
+
+    const aiResponse = await this.getAIResponse(candidateId, message);
+
     await this.prisma.chatMessage.create({
-      data: { userId, sender: 'ai', message: aiResponse },
+      data: {
+        candidateId,
+        sender: 'ai',
+        message: aiResponse,
+        isCompleted: false,
+      },
     });
 
     return aiResponse;
   }
 
-  async getChatHistory(userId: string) {
+  async getChatHistory(candidateId: string): Promise<ChatMessage[]> {
     return this.prisma.chatMessage.findMany({
       where: {
-        userId,
+        candidateId,
         NOT: { sender: 'system' },
       },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async storeJobDescription(userId: string, jdText: string): Promise<void> {
+  async storeJobDescription(
+    candidateId: string,
+    jdText: string,
+  ): Promise<void> {
     await this.prisma.chatMessage.create({
-      data: { userId, sender: 'system', message: jdText },
+      data: {
+        candidateId,
+        sender: 'system',
+        message: jdText,
+        isCompleted: false,
+      },
     });
   }
 
-  async processJobDescription(
-    userId: string,
-    filePath: string,
-  ): Promise<string> {
+  // async processJobDescription(userId: string, filePath: string): Promise<any> {
+  //   const pdfText = await this.extractTextFromPdf(filePath);
+  // }
+  // await this.storeJobDescription(userId, pdfText);
+  // const firstQuestion = await this.getAIResponse(userId, pdfText);
+  // await this.prisma.chatMessage.create({
+  //   data: { userId, sender: 'ai', message: firstQuestion },
+  // });
+  // return firstQuestion;
+  async processJobDescription(hrId: string, filePath: string): Promise<Job> {
     const pdfText = await this.extractTextFromPdf(filePath);
-    await this.storeJobDescription(userId, pdfText);
-    const firstQuestion = await this.getAIResponse(userId, pdfText);
-    await this.prisma.chatMessage.create({
-      data: { userId, sender: 'ai', message: firstQuestion },
+    const refinedJob = await this.refineWithGemini(pdfText);
+
+    const job = await this.prisma.job.create({
+      data: {
+        title: refinedJob.title,
+        company: refinedJob.company,
+        location: refinedJob.location,
+        salary: refinedJob.salary || null,
+        experience: refinedJob.experience,
+        description: refinedJob.description,
+        requirements: refinedJob.requirements || [],
+        createdAt: new Date(),
+        hrId,
+      },
     });
-    return firstQuestion;
+
+    return job;
   }
 
-  async getAIResponse(userId: string, prompt: string): Promise<string> {
+  async refineWithGemini(pdfText: string) {
     try {
       const model = this.genAI.getGenerativeModel({
         model: 'gemini-1.5-flash',
       });
 
+      const prompt = `
+        Extract the following job details from the text and format the response as JSON:
+        - title: The job title
+        - company: The company name
+        - location: Job location
+        - salary: Salary information (if available)
+        - experience: Required experience level
+        - description: Job description
+        - requirements: List of job requirements (as an array)
+        
+        Text to extract from:
+        ${pdfText}
+        
+        Return ONLY valid JSON matching the Job model structure without any additional text.
+      `;
+
+      const response = await model.generateContent({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
+      });
+
+      const responseText = response.response.text();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error(
+          'Failed to extract structured job data from Gemini response',
+        );
+      }
+      const jobData = JSON.parse(jsonMatch[0]);
+      const job = {
+        title: jobData.title || 'Unknown Title',
+        company: jobData.company || 'Unknown Company',
+        location: jobData.location || 'Unknown Location',
+        salary: jobData.salary || null,
+        experience: jobData.experience || 'Not specified',
+        description: jobData.description || 'No description provided',
+        requirements: Array.isArray(jobData.requirements)
+          ? jobData.requirements
+          : [],
+      };
+      return job;
+    } catch (error) {
+      console.error('Error in Gemini job refinement:', error);
+      throw new Error(`Failed to extract job details: ${error.message}`);
+    }
+  }
+  async getAIResponse(userId: string, prompt: string): Promise<string> {
+    try {
+      const job = await this.prisma.job.findUnique({
+        where: { id: prompt },
+      });
+      if (!job) {
+        return 'Job not found. Please provide a valid job ID.';
+      }
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+      });
+
+      const jobDescription = `
+      Job Title: ${job.title}
+      Company: ${job.company}
+      Description: ${job.description}
+      Requirements: ${job.requirements}
+      Experience: ${job.experience}
+      Location: ${job.location}
+      Salary Range: ${job.salary}
+          `.trim();
+
       const jdMessage = await this.prisma.chatMessage.findFirst({
-        where: { userId, sender: 'system' },
+        where: { candidateId: userId, sender: 'system' },
         orderBy: { createdAt: 'desc' },
       });
 
@@ -78,7 +183,7 @@ export class ChatService {
           text: 'You are an AI Talent Acquisition Agent. Your job is to generate structured interview questions based on the given Job Description (JD) and evaluate if you are a good fit after 3 questions.',
         },
         { text: 'Job Description (JD) Provided:' },
-        { text: jdMessage?.message || prompt },
+        { text: jdMessage.message },
         {
           text: 'Analyze the JD to extract key skills, qualifications, and experience. DO NOT display them explicitly.',
         },

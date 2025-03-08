@@ -2,6 +2,9 @@ import { IsString, IsOptional, IsArray, ArrayNotEmpty } from 'class-validator';
 
 export class CreateJobDto {
   @IsString()
+  hrId: string;
+
+  @IsString()
   title: string;
 
   @IsString()

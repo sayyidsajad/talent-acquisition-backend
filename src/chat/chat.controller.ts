@@ -31,6 +31,12 @@ export class ChatController {
     return { success: true, message: response };
   }
 
+  @Get('generate-question/:jobId')
+  async interview(@Param('jobId') jobId: string) {
+    const response = await this.chatService.getAIResponse('user123', jobId);
+    return { success: true, message: response };
+  }
+
   @Post(':userId/upload-pdf')
   @UseInterceptors(FileInterceptor('pdf', multerConfig))
   async uploadPdf(
