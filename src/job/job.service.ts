@@ -12,10 +12,25 @@ export class JobService {
     });
   }
 
-  findAll() {
-    return this.prisma.job.findMany();
-  }
+  findAll(id?: string, role?: string) {
+    if (role === 'HR' && id) {
+      return this.prisma.job.findMany({
+        where: { hrId: id },
+      });
+    }
 
+    return this.prisma.job.findMany({
+      include: {
+        interviews: {
+          where: { candidateId: id },
+          select: { isInterviewCompleted: true },
+        },
+      },
+      orderBy: {
+        interviews: { _count: 'asc' },
+      },
+    });
+  }
   async findOne(id: string) {
     const job = await this.prisma.job.findUnique({
       where: { id },

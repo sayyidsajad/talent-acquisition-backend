@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Req,
 } from '@nestjs/common';
 import { JobService } from './job.service';
 import { CreateJobDto } from './dto/create-job.dto';
@@ -22,8 +23,9 @@ export class JobController {
   }
 
   @Get()
-  async findAll() {
-    const jobs = await this.jobService.findAll();
+  async findAll(@Req() req: Request) {
+    const { id, role } = req['user'];
+    const jobs = await this.jobService.findAll(id, role);
     return { success: true, data: jobs };
   }
 
