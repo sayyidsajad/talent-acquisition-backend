@@ -56,7 +56,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Ignore Prisma folder
-prisma/
+prisma/migrations
 
 # Ignore uploads folder
 uploads/
