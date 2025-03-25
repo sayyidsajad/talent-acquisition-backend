@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { MailerService as NestMailerService } from '@nestjs-modules/mailer';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MailService {
-  constructor(private readonly mailerService: NestMailerService) {}
+  constructor(
+    private readonly mailerService: NestMailerService,
+    private configService: ConfigService,
+  ) {}
 
   async sendMagicLink(email: string, token: string): Promise<void> {
-    const magicLink = `http://localhost:4200/auth/verify?token=${token}`;
+    const magicLink = `${this.configService.get<string>('CLIENT_HOST')}/auth/verify?token=${token}`;
 
     await this.mailerService.sendMail({
       to: email,
