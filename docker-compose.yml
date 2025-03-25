@@ -21,7 +21,7 @@ services:
     depends_on:
       - postgres
     environment:
-      DATABASE_URL: "postgres://neondb_owner:npg_7TgBjWAw9hKu@ep-dawn-dream-a5v2gv5q-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+      DATABASE_URL: "postgresql://postgres:9074@postgres:5432/talent-db"
     ports:
       - "3000:3000"
     env_file:
