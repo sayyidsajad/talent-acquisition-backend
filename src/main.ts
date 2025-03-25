@@ -1,28 +1,23 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
-import * as functions from 'firebase-functions';
-
-let server;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const configService = app.get(ConfigService);
 
-  const clientHost = configService.get('CLIENT_HOST') || '*';
+  const configService = app.get(ConfigService);
+  const port = configService.get<number>('PORT');
+  const clientHost = configService.get<string>('CLIENT_HOST');
+
   app.enableCors({
     origin: [clientHost],
-    methods: '*',
-    allowedHeaders: '*',
+    methods: ['*'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   });
 
-  await app.init();
-
-  const expressInstance = app.getHttpAdapter().getInstance();
-  server = functions.https.onRequest(expressInstance);
+  await app.listen(port);
+  console.log(`Server running on http://localhost:${port}`);
 }
 
-bootstrap().catch(console.error);
-
-export { server };
+bootstrap();
